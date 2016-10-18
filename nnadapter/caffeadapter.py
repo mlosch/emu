@@ -102,7 +102,11 @@ class CaffeAdapter(NNAdapter):
 
     def forward(self, input):
         # transform input
-        data = np.zeros((len(input), 3, 227, 227))
+        shape = self.net.blobs['data'].shape
+        np_shape = [shape[i] for i in range(len(shape))]
+        np_shape[0] = len(input)
+
+        data = np.zeros(np_shape)
 
         for i, h in enumerate(input):
             if type(h) == str:
