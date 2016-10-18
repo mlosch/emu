@@ -7,6 +7,7 @@ import PyTorchHelpers
 import numpy as np
 
 from nnadapter import NNAdapter
+import image
 
 
 class TorchAdapter(NNAdapter):
@@ -149,11 +150,11 @@ class TorchAdapter(NNAdapter):
 
         for i, h in enumerate(input):
             if type(h) == str:
-                im = nnadapter.image.read(h)
+                im = image.read(h)
             elif type(h) == np.ndarray:
                 im = h
 
-            im = nnadapter.image.resize(im, self.inputsize[1:])
+            im = image.resize(im, self.inputsize[1:])
 
             if self.mean.ndim == 1:
                 im -= self.mean
