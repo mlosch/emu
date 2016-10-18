@@ -2,8 +2,8 @@ class NNAdapter(object):
     """
     Base class for NN library interfaces to load and read pre-trained models.
 
-    By overriding the abstract methods for different neural network libraries like Caffe, Torch or Keras,
-    we can enable simplified communication between analysis scripts and libraries.
+    Override the abstract methods for different neural network libraries like Caffe, Torch or Keras,
+    to enable simplified communication between analysis scripts and libraries.
     """
     def forward(self, input):
         """

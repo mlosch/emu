@@ -1,11 +1,12 @@
-from nnadapter import NNAdapter
+import re
 from collections import OrderedDict
-import numpy as np
-import image
+
 import PyTorch
 import PyTorchAug
 import PyTorchHelpers
-import re
+import numpy as np
+
+from nnadapter import NNAdapter
 
 
 class TorchAdapter(NNAdapter):
@@ -15,7 +16,7 @@ class TorchAdapter(NNAdapter):
     """
     def __init__(self, model_fp, required_modules, mean, std, inputsize):
         # Load the Lua class that does the actual computation
-        adapterclass = PyTorchHelpers.load_lua_class('torchadapter.lua', 'TorchAdapter')
+        adapterclass = PyTorchHelpers.load_lua_class('nnadapter/backend/torchadapter.lua', 'TorchAdapter')
         self.adapter = adapterclass()
 
         # Load necessary torch modules to run the model
@@ -148,11 +149,11 @@ class TorchAdapter(NNAdapter):
 
         for i, h in enumerate(input):
             if type(h) == str:
-                im = image.read(h)
+                im = nnadapter.image.read(h)
             elif type(h) == np.ndarray:
                 im = h
 
-            im = image.resize(im, self.inputsize[1:])
+            im = nnadapter.image.resize(im, self.inputsize[1:])
 
             if self.mean.ndim == 1:
                 im -= self.mean

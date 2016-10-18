@@ -7,12 +7,14 @@ def read(filename, color=True):
     """
     Load an image converting from grayscale or alpha as needed.
     Boldly copied from the caffe.io routine load_image: https://github.com/BVLC/caffe/blob/master/python/caffe/io.py
+
     Parameters
     ----------
     filename : string
     color : boolean
         flag for color format. True (default) loads as RGB while False
         loads as intensity (if image is already grayscale).
+
     Returns
     -------
     image : an image with type np.float32 in range [0, 1]
