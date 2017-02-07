@@ -13,6 +13,7 @@ class CaffeAdapter(NNAdapter):
     """
     def __init__(self, prototxt, caffemodel, mean):
         self.net = caffe.Net(prototxt, caffemodel, caffe.TEST)
+        caffe.set_mode_gpu()
 
         if type(mean) == str:
             if mean.endswith('.binaryproto'):
@@ -100,24 +101,49 @@ class CaffeAdapter(NNAdapter):
             return None
         return self.net.blobs[layer].data
 
-    def forward(self, input):
+    def preprocess(self, listofimages):
+        """
+        Preprocess a list of images to be used with the neural network.
+
+        Parameters
+        ----------
+        listofimages : List of strings or list of ndarrays, shape (Height, Width, Channels)
+            The list may contain image filepaths and image ndarrays.
+            For ndarrays, the shape (Height, Width, Channels) has to conform with the input size stated in the model prototxt.
+
+        Returns
+        -------
+        output : ndarray
+            Preprocessed batch of images.
+        """
         # transform input
         shape = self.net.blobs['data'].shape
         np_shape = [shape[i] for i in range(len(shape))]
-        np_shape[0] = len(input)
+        np_shape[0] = len(listofimages)
 
         data = np.zeros(np_shape)
 
-        for i, h in enumerate(input):
-            if type(h) == str:
+        for i, h in enumerate(listofimages):
+            if type(h) is str:
                 data[i] = self.transformer.preprocess('data', caffe.io.load_image(h))
-            elif type(h) == np.ndarray:
+            elif type(h) is np.ndarray:
                 data[i] = self.transformer.preprocess('data', h)
 
+        return data
+
+    def forward(self, data):
         self.net.blobs['data'].reshape(*data.shape)
         self.net.blobs['data'].data[...] = data[...]
         out = self.net.forward()
 
         self.ready = True
 
-        return out[out.keys()[0]]
+        clean_out = []
+        for k, v in out.items():
+            clean_out.append(v)
+        out = clean_out
+
+        if len(out) == 1:
+            return out[0]
+        else:
+            return out
