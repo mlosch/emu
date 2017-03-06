@@ -35,8 +35,8 @@ class TorchAdapter(NNAdapter):
         self.adapter.loadfrom(model_fp)
 
         # Load/set mean and std
-        self.mean = TorchAdapter.load_mean_std(mean)
-        self.std = TorchAdapter.load_mean_std(std)
+        self.mean = TorchAdapter.load_mean_std(mean).astype(np.float32)
+        self.std = TorchAdapter.load_mean_std(std).astype(np.float32)
 
         self.nomean_warn = True
         self.nostd_warn = True
@@ -243,3 +243,27 @@ class TorchAdapter(NNAdapter):
         self.ready = True
 
         return out
+
+    def visualize(self, input, layerpath, unitidx):
+        layerids = [int(layer) for layer in layerpath.split('.')]
+
+        input_tensor = PyTorch.asFloatTensor(input.copy())
+
+        self.adapter.forward(input_tensor, True)
+        out = self.get_layeroutput(layerpath)
+
+        unit_activation = out[:, unitidx]
+        mx = np.argmax(unit_activation)
+        mx = np.unravel_index(mx, unit_activation.shape)
+
+        target = np.zeros(out.shape, dtype=np.float32)
+        target[:, unitidx, target.shape[2]//2, target.shape[3]//2] = 1
+        # target[:, unitidx] = unit_activation
+        # target[:, unitidx, mx[1], mx[2]] = unit_activation[mx[0], mx[1], mx[2]]
+        target_tensor = PyTorch.asFloatTensor(target)
+
+        vis = self.adapter.visualize(input_tensor, layerids, target_tensor, PyTorch.asFloatTensor(self.mean), PyTorch.asFloatTensor(self.std))
+
+        return vis.asNumpyTensor()
+
+

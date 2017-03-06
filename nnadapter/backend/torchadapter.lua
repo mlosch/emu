@@ -164,3 +164,72 @@ function torchadapter.getlayeroutput(self, pathtolayer)
     end
     return self.tocpu(m.output)
 end
+
+function torchadapter.visualize(self, input, pathtolayer, target, mean, std)
+    local m = nn.Sequential()
+
+    for i=1,pathtolayer[3] do
+        m:add(self.model:get(1):get(1):get(i))
+    end
+
+    local alpha = 1.0
+    local gamma = 0.01
+    local blur_every = 10
+    local percentile = 0.3
+
+    local gaussian_krnl = torch.Tensor({
+        {0.0509,  0.1238,  0.0509},
+        {0.1238,  0.3012,  0.1238},
+        {0.0509,  0.1238,  0.0509}})
+    local blur = nn.SpatialConvolution(3, 3, 3, 3, 1, 1, 1, 1)
+    blur.bias:zero()
+    blur.weight:zero()
+    blur.weight[{1, 1, {}, {}}]:copy(gaussian_krnl)
+    blur.weight[{2, 2, {}, {}}]:copy(gaussian_krnl)
+    blur.weight[{3, 3, {}, {}}]:copy(gaussian_krnl)
+
+    local criterion = nn.MSECriterion()
+    if self.useGPU then
+        criterion = criterion:cuda()
+        input = input:cuda()
+        target = target:cuda()
+        blur = blur:cuda()
+    end
+
+    local err = 0
+    for i=1,1000 do
+        for k=1,3 do
+            input[{1,k,{},{}}]:mul(std[k])
+            input[{1,k,{},{}}]:add(mean[k])
+
+            input[{1,k,{},{}}]:clamp(0.0, 1.0)
+
+            input[{1,k,{},{}}]:add(-mean[k])
+            input[{1,k,{},{}}]:mul(1 / std[k])
+        end
+        local output = m:forward(input)
+
+        err = criterion:forward(output, target)
+        --local da_dt = criterion:backward(output, target)
+        local di_da = m:updateGradInput(input, target)
+
+        input:add(alpha, di_da)
+        input:mul(1-gamma)
+
+        if i % blur_every == 0 then
+            input:copy(blur:forward(input))
+        end
+
+        local i_min = input:min()
+        local i_max = input:max()
+        local lower_bound = i_min + (i_max - i_min) * percentile
+        local mask = torch.abs(input):lt(lower_bound)
+        input[mask] = 0
+
+        --print(''.. i ..': '.. err)
+    end
+    print(err)
+
+    return input:float()
+
+end
