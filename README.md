@@ -44,8 +44,12 @@ The base class defines the following functionality:
 - Find pretrained models:
     - **Caffe:** 
         - [Model Zoo](https://github.com/BVLC/caffe/wiki/Model-Zoo)
-        - [ResNets](https://github.com/KaimingHe/deep-residual-networks#models) 
-    - **Torch7:** 
+        - [ResNets](https://github.com/KaimingHe/deep-residual-networks#models)
+    - **PyTorch:**
+        - [Model Zoo](https://github.com/pytorch/vision#installation)
+          After installation, use pretrained models via passing an available architecture name to the `TorchAdapter`, 
+          e.g.: `TorchAdapter(model_fp='resnet18')`. See [Available models](https://github.com/pytorch/vision#models)
+    - **Torch7:** (Warning, support is rudimentary) 
         - [Model Zoo](https://github.com/torch/torch7/wiki/ModelZoo)
         - [ResNets](https://github.com/facebook/fb.resnet.torch/tree/master/pretrained)
 - See the [example notebook](examples/summary_statistics.ipynb) on how to use NNAdapter to calculate summary statistics on pretrained caffe or torch models.
