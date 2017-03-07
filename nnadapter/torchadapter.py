@@ -1,11 +1,11 @@
-import os
 import re
 from collections import OrderedDict
-import pkg_resources
+from functools import partial
 
-import PyTorch
-import PyTorchAug
-import PyTorchHelpers
+import torch
+from torch.autograd import Variable
+from torch.utils.serialization import load_lua
+from .backend.torchlegacy import load_legacy_model, LambdaBase
 import numpy as np
 
 from nnadapter import NNAdapter
@@ -18,21 +18,27 @@ class TorchAdapter(NNAdapter):
     An installation of Torch and pytorch is required.
     """
 
-    def __init__(self, model_fp, required_modules, mean, std, inputsize):
+    def __init__(self, model_fp, mean, std, inputsize, use_gpu=False):
         # Load the Lua class that does the actual computation
-        lua_file_abs = pkg_resources.resource_filename(__name__, 'backend/torchadapter.lua')
-        lua_file_rel = os.path.relpath(lua_file_abs, os.getcwd())
-
-        adapterclass = PyTorchHelpers.load_lua_class(lua_file_rel, 'TorchAdapter')
-        self.adapter = adapterclass()
-
-        # Load necessary torch modules to run the model
-        for module in required_modules:
-            print('Loading torch module {}'.format(module))
-            self.adapter.require(module)
-
         print('Loading model from {}'.format(model_fp))
-        self.adapter.loadfrom(model_fp)
+        if model_fp.endswith('.t7'):
+            self.model = load_legacy_model(model_fp)
+        else:
+            self.model = torch.load(model_fp)
+        self.model.train(False)
+
+        if use_gpu:
+            self.model.cuda()
+        else:
+            self.model.float()
+
+        self.blobs = {}
+        self.state_dict = self.model.state_dict()
+
+        # register forward hooks with model
+        self._register_forward_hooks(self.model)
+        # self.model.apply(lambda mod: mod.register_forward_hook(self._nn_forward_hook))
+        # self.model.register_forward_hook(self._nn_forward_hook)
 
         # Load/set mean and std
         self.mean = TorchAdapter.load_mean_std(mean)
@@ -43,6 +49,25 @@ class TorchAdapter(NNAdapter):
 
         self.ready = False
         self.inputsize = inputsize
+
+        self.use_gpu = use_gpu
+
+    def _register_forward_hooks(self, module, trace=[]):
+        """
+        Recursively registers the _nn_forward_hook method with each module
+        while assigning an appropriate layer-path to each module
+        """
+        for key, mod in module._modules.items():
+            trace.append(key)
+            mod.register_forward_hook(partial(self._nn_forward_hook, name='.'.join(trace)))
+            self._register_forward_hooks(mod, trace)
+            trace.pop()
+
+    def _nn_forward_hook(self, module, input, output, name=''):
+        if type(output) is list:
+            self.blobs[name] = [o.data.clone() for o in output]
+        else:
+            self.blobs[name] = output.data.clone()
 
     @staticmethod
     def load_mean_std(handle):
@@ -56,49 +81,61 @@ class TorchAdapter(NNAdapter):
         ----------
         mean/std : Numpy array expressing mean/std
         """
-        if type(handle) == str and handle.endswith('.t7'):
-            return PyTorchAug.load(handle).asNumpyTensor()
+        if type(handle) == str:
+            if handle.endswith('.t7'):
+                return load_lua(handle).numpy()
+            else:
+                return torch.load(handle).numpy()
         elif type(handle) == np.ndarray:
             return handle
 
     def model_description(self):
-        self.adapter.modeldescription()
+        return str(self.model)
 
     @staticmethod
     def _natural_sort_key(s, _nsre=re.compile('([0-9]+)')):
         return [int(text) if text.isdigit() else text.lower()
                 for text in re.split(_nsre, s[0])]
 
+    def _get_layers(self, module, dictionary, trace):
+        for key, mod in module._modules.items():
+            trace.append(key)
+            if isinstance(mod, LambdaBase):
+                desc = '{} ({})'.format(mod, mod.__class__.__name__)
+            elif isinstance(mod, torch.nn.Sequential):
+                desc = mod.__class__.__name__
+            else:
+                desc = str(mod)
+            dictionary['.'.join(trace)] = desc
+            self._get_layers(mod, dictionary, trace)
+            trace.pop()
+
     def get_layers(self):
-        unordered = self.adapter.getlayers()
-        ordered = OrderedDict(sorted(unordered.items(), key=TorchAdapter._natural_sort_key))
-        return ordered
+        layers = OrderedDict()
+        trace = []
+        self._get_layers(self.model, layers, trace)
+        return layers
+
+    def _get_param(self, layerpath, keysuffix):
+        key = layerpath + '.' + keysuffix
+        if key not in self.state_dict:
+            raise ValueError('Layer with id {} does not exist or does not hold any {}.'.format(layerpath, keysuffix))
+        return self.state_dict[key]
+
+    def _set_param(self, layerpath, keysuffix, values):
+        key = layerpath + '.' + keysuffix
+        if values.shape != self.state_dict[key].size():
+            raise ValueError('Dimensions do not match for layer {}.'.format(layerpath))
+
+        layer_values = self._get_param(layerpath, keysuffix)
+        torch_values = torch.from_numpy(values)
+        layer_values.copy_(torch_values)
 
     def set_weights(self, layerpath, weights):
-        layerids = layerpath.split('.')
-        layerids = [int(layer) for layer in layerids]
-
-        torch_weights = PyTorch.asFloatTensor(weights)
-        retval = self.adapter.set_weights(layerids, torch_weights)
-        if retval == -1:
-            raise ValueError('Layer with id {} does not exist.'.format(layerpath))
-        elif retval == -2:
-            raise ValueError('Layer with id {} does not hold any weights.'.format(layerpath))
-        elif retval == -3:
-            raise ValueError('Dimensions of mask and weights do not match for layer {}.'.format(layerpath))
+        self._set_param(layerpath, 'weight', weights)
 
     def set_bias(self, layerpath, bias):
-        layerids = layerpath.split('.')
-        layerids = [int(layer) for layer in layerids]
-
-        torch_bias = PyTorch.asFloatTensor(bias)
-        retval = self.adapter.set_bias(layerids, torch_bias)
-        if retval == -1:
-            raise ValueError('Layer with id {} does not exist.'.format(layerpath))
-        elif retval == -2:
-            raise ValueError('Layer with id {} does not hold any bias.'.format(layerpath))
-        elif retval == -3:
-            raise ValueError('Dimensions of mask and bias do not match for layer {}.'.format(layerpath))
+        self._set_param(layerpath, 'bias', bias)
 
     def get_layerparams(self, layerpath):
         """
@@ -115,18 +152,15 @@ class TorchAdapter(NNAdapter):
         -------
         (weights, bias) : Tuple of ndarrays
         """
-        layerids = layerpath.split('.')
-        layerids = [int(layer) for layer in layerids]
+        weight_key = layerpath + '.weight'
+        bias_key = layerpath + '.bias'
+        weights = self._get_param(layerpath, 'weight') if weight_key in self.state_dict else None
+        bias = self._get_param(layerpath, 'bias') if bias_key in self.state_dict else None
 
-        torch_tuple = self.adapter.getlayerparams(layerids)
+        np_weights = weights.cpu().numpy() if weights is not None else None
+        np_bias = bias.cpu().numpy() if bias is not None else None
 
-        if torch_tuple is not None and len(torch_tuple) == 0:
-            raise ValueError('Layer with id {} does not contain any weights or bias.')
-        if not torch_tuple:
-            raise ValueError('Layer with id {} does not exist.'.format(layerpath))
-
-        np_tuple = (torch_tuple['weight'].asNumpyTensor(), torch_tuple['bias'].asNumpyTensor() if 'bias' in torch_tuple else None)
-        return np_tuple
+        return np_weights, np_bias
 
     def get_layeroutput(self, layerpath):
         """
@@ -147,21 +181,18 @@ class TorchAdapter(NNAdapter):
         """
         assert self.ready, 'Forward has not been called. Layer outputs are not ready.'
 
-        layerids = layerpath.split('.')
-        layerids = [int(layer) for layer in layerids]
-
-        out = self.adapter.getlayeroutput(layerids)
-
-        if out is None:
+        if layerpath not in self.blobs:
             raise ValueError('Layer with id {} does not exist.'.format(layerpath))
 
-        if type(out) is dict:
+        out = self.blobs[layerpath]
+
+        if type(out) is list:
             clean_out = []
-            for k, v in out.items():
-                clean_out.append(v.asNumpyTensor())
+            for v in out:
+                clean_out.append(v.cpu().numpy())
             out = clean_out
         else:
-            out = out.asNumpyTensor()
+            out = out.cpu().numpy()
 
         return out
 
@@ -229,17 +260,37 @@ class TorchAdapter(NNAdapter):
             Output of final network layer.
         """
 
-        input_tensor = PyTorch.asFloatTensor(input)
+        input_torch = torch.from_numpy(input)
+        if self.use_gpu:
+            input_torch = input_torch.cuda()
+        else:
+            input_torch = input_torch.float()
+
+        input_var = Variable(input_torch)
 
         # forward
-        out = self.adapter.forward(input_tensor, True)
-        if type(out) is dict:
+        out = self.model.forward(input_var)
+
+        if type(out) is list:
             clean_out = []
-            for k, v in out.items():
-                clean_out.append(v.asNumpyTensor())
+            for v in out:
+                clean_out.append(v.data.cpu().numpy())
             out = clean_out
         else:
-            out = out.asNumpyTensor()
+            out = out.data.cpu().numpy()
         self.ready = True
 
         return out
+
+    def _traverse_model(self, pathtolayer):
+        m = self.model
+        if type(pathtolayer) is list:
+            for layer in pathtolayer:
+                if len(m._modules) == 0:
+                    raise KeyError('Layer {} does not exist .{} does not contain the requested sub-node.'.format(
+                        pathtolayer, type(m)
+                    ))
+                m = m.modules[layer]
+            return m
+        else:
+            return m.modules[pathtolayer]
