@@ -152,3 +152,27 @@ class CaffeAdapter(NNAdapter):
             return out[0]
         else:
             return out
+
+    def set_weights(self, layer, weights):
+        if layer not in self.net.params:
+            raise KeyError('Layer {} does not exist.'.format(layer))
+
+        param_shape = tuple(self.net.params[layer][0].shape)
+        if param_shape != weights.shape:
+            raise ValueError('Weight dimensions ({}, {}) do not match.'.format(
+                str(param_shape),
+                str(weights.shape)))
+
+        self.net.params[layer][0].data[...] = weights[...]
+
+    def set_bias(self, layer, bias):
+        if layer not in self.net.params:
+            raise KeyError('Layer {} does not exist.'.format(layer))
+
+        param_shape = tuple(self.net.params[layer][1].shape)
+        if param_shape != bias.shape:
+            raise ValueError('Bias dimensions ({}, {}) do not match.'.format(
+                str(param_shape),
+                str(bias.shape)))
+
+        self.net.params[layer][1].data[...] = bias[...]
