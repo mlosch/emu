@@ -6,8 +6,8 @@ Generic python interface to simplify access to neural networks trained in machin
 NNAdapter is a lightweight interface to deep learning libraries to simplify the creation of analysis toolchains. The focus is on processing images with pretrained image recognition models, manipulating parameters (e.g. to lesion a set of units) as well as reading parameters and output values of arbitrary layers. Hence, no training is supported with the nnadapter-interface.
 Currently supported machine learning libraries (backends) are:
 
-- Caffe
-- Torch
+- [Caffe](http://caffe.berkeleyvision.org)
+- [pytorch](http://pytorch.org) & [Torch7](http://torch.ch)
 
 ## Core functionality
 The base class defines the following functionality:
@@ -34,12 +34,18 @@ The base class defines the following functionality:
     - numpy (>= 1.11.1)
     - scikit-image (>= 0.12.3)
 - Using Caffe as backend
-    - [caffe](https://github.com/BVLC/caffe)
-    - pycaffe
-- Using torch as backend
-    - [torch](http://torch.ch)
-    - [PyTorch](https://github.com/hughperkins/pytorch) (>= 4.1.1-SNAPSHOT)
+    - [caffe](http://caffe.berkeleyvision.org/installation.html)
+    - [pycaffe](http://caffe.berkeleyvision.org/installation.html#python-andor-matlab-caffe-optional)
+- Using torch/pytorch as backend
+    - [pytorch](https://github.com/pytorch/pytorch#installation)
     
 ## How-To
 
+- Find pretrained models:
+    - **Caffe:** 
+        - [Model Zoo](https://github.com/BVLC/caffe/wiki/Model-Zoo)
+        - [ResNets](https://github.com/KaimingHe/deep-residual-networks#models) 
+    - **Torch7:** 
+        - [Model Zoo](https://github.com/torch/torch7/wiki/ModelZoo)
+        - [ResNets](https://github.com/facebook/fb.resnet.torch/tree/master/pretrained)
 - See the [example notebook](examples/summary_statistics.ipynb) on how to use NNAdapter to calculate summary statistics on pretrained caffe or torch models.

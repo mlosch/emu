@@ -37,8 +37,6 @@ class TorchAdapter(NNAdapter):
 
         # register forward hooks with model
         self._register_forward_hooks(self.model)
-        # self.model.apply(lambda mod: mod.register_forward_hook(self._nn_forward_hook))
-        # self.model.register_forward_hook(self._nn_forward_hook)
 
         # Load/set mean and std
         self.mean = TorchAdapter.load_mean_std(mean)
@@ -97,9 +95,13 @@ class TorchAdapter(NNAdapter):
         return [int(text) if text.isdigit() else text.lower()
                 for text in re.split(_nsre, s[0])]
 
-    def _get_layers(self, module, dictionary, trace):
+    def _get_layers(self, module, dictionary, trace=[]):
         for key, mod in module._modules.items():
             trace.append(key)
+            """
+            str(mod) returns too complicated descriptions for Sequential. We limit the description to its name.
+            LambdaBase may be used for legacy torch7 models.
+            """
             if isinstance(mod, LambdaBase):
                 desc = '{} ({})'.format(mod, mod.__class__.__name__)
             elif isinstance(mod, torch.nn.Sequential):
@@ -112,8 +114,7 @@ class TorchAdapter(NNAdapter):
 
     def get_layers(self):
         layers = OrderedDict()
-        trace = []
-        self._get_layers(self.model, layers, trace)
+        self._get_layers(self.model, layers)
         return layers
 
     def _get_param(self, layerpath, keysuffix):
