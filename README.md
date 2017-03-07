@@ -1,5 +1,5 @@
 # nnadapter
-Generic python interface to simplify access to neural networks trained in machine learning libraries such as Caffe and Torch
+Generic python interface to unify access to neural networks trained in machine learning libraries such as Caffe, PyTorch and Torch7.
 
 ## What is nnadapter?
 
@@ -38,6 +38,10 @@ The base class defines the following functionality:
     - [pycaffe](http://caffe.berkeleyvision.org/installation.html#python-andor-matlab-caffe-optional)
 - Using torch/pytorch as backend
     - [pytorch](https://github.com/pytorch/pytorch#installation)
+
+## Installation
+
+`python setup.py install`
     
 ## How-To
 

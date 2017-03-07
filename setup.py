@@ -17,7 +17,8 @@ setup(
     # https://packaging.python.org/en/latest/single_source_version.html
     version='0.1.0',
 
-    description='Generic python interface to simplify access to neural networks trained in machine learning libraries such as Caffe and Torch',
+    description='Generic python interface to unify access to neural networks ' \
+                'trained in machine learning libraries such as Caffe, PyTorch and Torch7',
     long_description=long_description,
 
     # The project's main homepage.
@@ -57,7 +58,7 @@ setup(
     ],
 
     # What does your project relate to?
-    keywords='dee-learning neural-networks torch caffe',
+    keywords='deep-learning neural-networks pytorch torch caffe',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
@@ -77,7 +78,6 @@ setup(
     # installed, specify them here.  If using Python 2.6 or less, then these
     # have to be included in MANIFEST.in as well.
     package_data={
-        'nnadapter': ['backend/torchadapter.lua'],
     },
 
     # To provide executable scripts, use entry points in preference to the
