@@ -27,7 +27,8 @@ class NNAdapter(object):
 
         Parameters
         ----------
-
+        input : ndarray
+            Preprocessed input.
 
         Returns
         -------
