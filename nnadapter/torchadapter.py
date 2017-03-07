@@ -1,4 +1,5 @@
 import re
+import os
 from collections import OrderedDict
 from functools import partial
 
@@ -14,17 +15,46 @@ import image
 
 class TorchAdapter(NNAdapter):
     """
-    Overrides the NNAdapter to load and read Torch models.
-    An installation of Torch and pytorch is required.
+    Overrides the NNAdapter to load and read Torch7/pytorch models.
+    An installation of pytorch is required.
     """
 
-    def __init__(self, model_fp, mean, std, inputsize, use_gpu=False):
-        # Load the Lua class that does the actual computation
-        print('Loading model from {}'.format(model_fp))
-        if model_fp.endswith('.t7'):
-            self.model = load_legacy_model(model_fp)
+    def __init__(self, model_fp, mean, std, inputsize, use_gpu=False, output_filter=[]):
+        """
+        Initializes the adapter with a pretrained model from a filepath or pytorch-model identifier
+        (see https://github.com/pytorch/vision#models).
+
+        Parameters
+        ----------
+        model_fp : String
+            Filepath or model identifier.
+        mean : ndarray or String
+            Mean definition via array or filepath to .t7 torch tensor.
+        std : ndarray or String
+            Standard deviation definition via array or filepath to .t7 torch tensor.
+        inputsize : tuple or list
+            Target input data dimensionality of format: (channels, height, width).
+            Used for rescaling given data in preprocess step.
+        use_gpu : bool
+            Flag to enable gpu use. Default: False
+        output_filter : list, tuple or set
+            List of layer identifier strings to disable the caching of specific layer outputs.
+            Matches any location within strings and is case sensitive.
+            This may be used to reduce the memory footprint during a forward pass while caching layer outputs.
+            By default, this filter is empty so that every layer output is cached.
+        """
+        if '.' not in os.path.basename(model_fp):
+            import torchvision.models as models
+            if model_fp not in models.__dict__:
+                raise KeyError('Model {} does not exist in pytorchs model zoo.'.format(model_fp))
+            print('Loading model {} from pytorch model zoo'.format(model_fp))
+            self.model = models.__dict__[model_fp](pretrained=True)
         else:
-            self.model = torch.load(model_fp)
+            print('Loading model from {}'.format(model_fp))
+            if model_fp.endswith('.t7'):
+                self.model = load_legacy_model(model_fp)
+            else:
+                self.model = torch.load(model_fp)
         self.model.train(False)
 
         if use_gpu:
@@ -36,6 +66,7 @@ class TorchAdapter(NNAdapter):
         self.state_dict = self.model.state_dict()
 
         # register forward hooks with model
+        self.output_filter = output_filter
         self._register_forward_hooks(self.model)
 
         # Load/set mean and std
@@ -57,7 +88,8 @@ class TorchAdapter(NNAdapter):
         """
         for key, mod in module._modules.items():
             trace.append(key)
-            mod.register_forward_hook(partial(self._nn_forward_hook, name='.'.join(trace)))
+            if key not in self.output_filter:
+                mod.register_forward_hook(partial(self._nn_forward_hook, name='.'.join(trace)))
             self._register_forward_hooks(mod, trace)
             trace.pop()
 
@@ -99,12 +131,13 @@ class TorchAdapter(NNAdapter):
         for key, mod in module._modules.items():
             trace.append(key)
             """
-            str(mod) returns too complicated descriptions for Sequential. We limit the description to its name.
+            str(mod) returns too complicated descriptions for modules that contain children.
+            We limit the description to its name.
             LambdaBase may be used for legacy torch7 models.
             """
             if isinstance(mod, LambdaBase):
                 desc = '{} ({})'.format(mod, mod.__class__.__name__)
-            elif isinstance(mod, torch.nn.Sequential):
+            elif len(mod._modules) > 0:
                 desc = mod.__class__.__name__
             else:
                 desc = str(mod)
@@ -183,7 +216,14 @@ class TorchAdapter(NNAdapter):
         assert self.ready, 'Forward has not been called. Layer outputs are not ready.'
 
         if layerpath not in self.blobs:
-            raise ValueError('Layer with id {} does not exist.'.format(layerpath))
+            if layerpath in self.get_layers():
+                raise ValueError('Layer with id {} does exist in the architecture '
+                                 'but has not been cached due to the output filter: [{}]'.format(
+                                    layerpath,
+                                    ','.join(self.output_filter),
+                                 ))
+            else:
+                raise ValueError('Layer with id {} does not exist.'.format(layerpath))
 
         out = self.blobs[layerpath]
 
