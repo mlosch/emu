@@ -11,9 +11,10 @@ class CaffeAdapter(NNAdapter):
     Overrides the NNAdapter to load and read Caffe models.
     An installation of Caffe and pycaffe is required.
     """
-    def __init__(self, prototxt, caffemodel, mean):
+    def __init__(self, prototxt, caffemodel, mean, use_gpu=False):
         self.net = caffe.Net(prototxt, caffemodel, caffe.TEST)
-        caffe.set_mode_gpu()
+        if use_gpu:
+            caffe.set_mode_gpu()
 
         if type(mean) == str:
             if mean.endswith('.binaryproto'):
@@ -40,6 +41,8 @@ class CaffeAdapter(NNAdapter):
 
         self.ready = False
 
+        self.use_gpu = use_gpu
+
     @staticmethod
     def _load_layer_types(prototxt):
         # Read prototxt with caffe protobuf definitions
@@ -63,8 +66,10 @@ class CaffeAdapter(NNAdapter):
         return arr[0]
 
     def model_description(self):
+        string = ''
         for k, v in self.net.blobs.items():
-            print(k, v)
+            string += '{}: {}\n'.format(k, v)
+        return string
 
     def get_layers(self):
         """
@@ -147,3 +152,27 @@ class CaffeAdapter(NNAdapter):
             return out[0]
         else:
             return out
+
+    def set_weights(self, layer, weights):
+        if layer not in self.net.params:
+            raise KeyError('Layer {} does not exist.'.format(layer))
+
+        param_shape = tuple(self.net.params[layer][0].shape)
+        if param_shape != weights.shape:
+            raise ValueError('Weight dimensions ({}, {}) do not match.'.format(
+                str(param_shape),
+                str(weights.shape)))
+
+        self.net.params[layer][0].data[...] = weights[...]
+
+    def set_bias(self, layer, bias):
+        if layer not in self.net.params:
+            raise KeyError('Layer {} does not exist.'.format(layer))
+
+        param_shape = tuple(self.net.params[layer][1].shape)
+        if param_shape != bias.shape:
+            raise ValueError('Bias dimensions ({}, {}) do not match.'.format(
+                str(param_shape),
+                str(bias.shape)))
+
+        self.net.params[layer][1].data[...] = bias[...]
