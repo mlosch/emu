@@ -133,7 +133,7 @@ def lua_recursive_model(module, seq):
             lua_recursive_model(m, n)
             add_submodule(seq, n)
         elif name == 'CAddTable':  # input is list
-            n = LambdaReduce(lambda x, y: x + y)
+            n = LambdaReduce(name, lambda x, y: x + y)
             add_submodule(seq, n)
         elif name == 'Concat':
             dim = m.dimension
