@@ -56,4 +56,7 @@ The base class defines the following functionality:
     - **Torch7:** (Warning, support is rudimentary) 
         - [Model Zoo](https://github.com/torch/torch7/wiki/ModelZoo)
         - [ResNets](https://github.com/facebook/fb.resnet.torch/tree/master/pretrained)
-- See the [example notebook](examples/summary_statistics.ipynb) on how to use NNAdapter to calculate summary statistics on pretrained caffe or torch models.
+        
+## Example notebooks  
+- [Loading and using NNAdapter](examples/summary_statistics.ipynb) on how to use NNAdapter to estimate mean and standard deviation of pretrained caffe or torch models.
+- [Lesioning/Altering parameters](examples/evaluate_and_lesion.ipynb) of models
