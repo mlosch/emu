@@ -19,7 +19,7 @@ class TorchAdapter(NNAdapter):
     An installation of pytorch is required.
     """
 
-    def __init__(self, model_fp, mean, std, inputsize, use_gpu=False, output_filter=[]):
+    def __init__(self, model_fp, mean, std, inputsize, keep_outputs=None, use_gpu=False):
         """
         Initializes the adapter with a pretrained model from a filepath or pytorch-model identifier
         (see https://github.com/pytorch/vision#models).
@@ -29,19 +29,19 @@ class TorchAdapter(NNAdapter):
         model_fp : String
             Filepath or model identifier.
         mean : ndarray or String
-            Mean definition via array or filepath to .t7 torch tensor.
+            Mean definition via array or filepath to .t7 torch or .npy tensor.
         std : ndarray or String
-            Standard deviation definition via array or filepath to .t7 torch tensor.
+            Standard deviation definition via array or filepath to .t7 torch or .npy tensor.
         inputsize : tuple or list
             Target input data dimensionality of format: (channels, height, width).
             Used for rescaling given data in preprocess step.
         use_gpu : bool
             Flag to enable gpu use. Default: False
-        output_filter : list, tuple or set
-            List of layer identifier strings to disable the caching of specific layer outputs.
-            Matches any location within strings and is case sensitive.
-            This may be used to reduce the memory footprint during a forward pass while caching layer outputs.
-            By default, this filter is empty so that every layer output is cached.
+        keep_outputs : list, tuple or set
+            List of layer identifier strings to keep during a feed forward call to enable later access via
+            get_layeroutput().
+            By default no layer outputs but the last are kept.
+            Consolidate get_layers() to identify layers.
         """
         if '.' not in os.path.basename(model_fp):
             import torchvision.models as models
@@ -66,7 +66,10 @@ class TorchAdapter(NNAdapter):
         self.state_dict = self.model.state_dict()
 
         # register forward hooks with model
-        self.output_filter = output_filter
+        if keep_outputs is None:
+            self.keep_outputs = []
+        else:
+            self.keep_outputs = keep_outputs
         self._register_forward_hooks(self.model)
 
         # Load/set mean and std
@@ -77,7 +80,7 @@ class TorchAdapter(NNAdapter):
         self.nostd_warn = True
 
         self.ready = False
-        self.inputsize = inputsize
+        self.inputsize = tuple(inputsize)
 
         self.use_gpu = use_gpu
 
@@ -88,7 +91,7 @@ class TorchAdapter(NNAdapter):
         """
         for key, mod in module._modules.items():
             trace.append(key)
-            if key not in self.output_filter:
+            if key in self.keep_outputs:
                 mod.register_forward_hook(partial(self._nn_forward_hook, name='.'.join(trace)))
             self._register_forward_hooks(mod, trace)
             trace.pop()
@@ -102,7 +105,7 @@ class TorchAdapter(NNAdapter):
     @staticmethod
     def load_mean_std(handle):
         """
-        Loads mean/std values from a .t7 file or returns the identity if already a numpy array.
+        Loads mean/std values from a .t7/.npy file or returns the identity if already a numpy array.
         Parameters
         ----------
         handle : Can be either a numpy array or a filepath as string
@@ -114,6 +117,8 @@ class TorchAdapter(NNAdapter):
         if type(handle) == str:
             if handle.endswith('.t7'):
                 return load_lua(handle).numpy()
+            elif handle.endswith('.npy'):
+                return np.load(handle)
             else:
                 return torch.load(handle).numpy()
         elif type(handle) == np.ndarray:
@@ -150,34 +155,34 @@ class TorchAdapter(NNAdapter):
         self._get_layers(self.model, layers)
         return layers
 
-    def _get_param(self, layerpath, keysuffix):
-        key = layerpath + '.' + keysuffix
+    def _get_param(self, layer, keysuffix):
+        key = layer + '.' + keysuffix
         if key not in self.state_dict:
-            raise ValueError('Layer with id {} does not exist or does not hold any {}.'.format(layerpath, keysuffix))
+            raise ValueError('Layer with id {} does not exist or does not hold any {}.'.format(layer, keysuffix))
         return self.state_dict[key]
 
-    def _set_param(self, layerpath, keysuffix, values):
-        key = layerpath + '.' + keysuffix
+    def _set_param(self, layer, keysuffix, values):
+        key = layer + '.' + keysuffix
         if values.shape != self.state_dict[key].size():
-            raise ValueError('Dimensions do not match for layer {}.'.format(layerpath))
+            raise ValueError('Dimensions do not match for layer {}.'.format(layer))
 
-        layer_values = self._get_param(layerpath, keysuffix)
+        layer_values = self._get_param(layer, keysuffix)
         torch_values = torch.from_numpy(values)
         layer_values.copy_(torch_values)
 
-    def set_weights(self, layerpath, weights):
-        self._set_param(layerpath, 'weight', weights)
+    def set_weights(self, layer, weights):
+        self._set_param(layer, 'weight', weights)
 
-    def set_bias(self, layerpath, bias):
-        self._set_param(layerpath, 'bias', bias)
+    def set_bias(self, layer, bias):
+        self._set_param(layer, 'bias', bias)
 
-    def get_layerparams(self, layerpath):
+    def get_layerparams(self, layer):
         """
         Return a copy of the parameters (weights, bias) of a layer.
 
         Parameters
         ----------
-        layerpath : String
+        layer : String
             Expected format: (%d.)*%d, e.g. 11.3.2 or 1
             specifying the location of the layer within the torch model.
             To see possible locations of a model, call `model_description`.
@@ -186,24 +191,24 @@ class TorchAdapter(NNAdapter):
         -------
         (weights, bias) : Tuple of ndarrays
         """
-        weight_key = layerpath + '.weight'
-        bias_key = layerpath + '.bias'
-        weights = self._get_param(layerpath, 'weight') if weight_key in self.state_dict else None
-        bias = self._get_param(layerpath, 'bias') if bias_key in self.state_dict else None
+        weight_key = layer + '.weight'
+        bias_key = layer + '.bias'
+        weights = self._get_param(layer, 'weight') if weight_key in self.state_dict else None
+        bias = self._get_param(layer, 'bias') if bias_key in self.state_dict else None
 
         np_weights = weights.cpu().numpy() if weights is not None else None
         np_bias = bias.cpu().numpy() if bias is not None else None
 
         return np_weights, np_bias
 
-    def get_layeroutput(self, layerpath):
+    def get_layeroutput(self, layer):
         """
         Get the output of a specific layer.
         forward(...) has to be called in advance.
 
         Parameters
         ----------
-        layerpath : String, Layer identification
+        layer : String, Layer identification
             Expected format: (%d.)*%d, e.g. 11.3.2 or 1
             specifying the location of the layer within the torch model.
             To see possible locations of a model, call `model_description`.
@@ -212,20 +217,24 @@ class TorchAdapter(NNAdapter):
         -------
         output : ndarray
             Numpy tensor of output values.
+
+        Raises
+        -------
+        ValueError : If Layer is not defined in model or has been ignore due to output filter.
         """
         assert self.ready, 'Forward has not been called. Layer outputs are not ready.'
 
-        if layerpath not in self.blobs:
-            if layerpath in self.get_layers():
+        if layer not in self.blobs:
+            if layer in self.get_layers():
                 raise ValueError('Layer with id {} does exist in the architecture '
                                  'but has not been cached due to the output filter: [{}]'.format(
-                                    layerpath,
-                                    ','.join(self.output_filter),
+                                    layer,
+                                    ','.join(self.keep_outputs),
                                  ))
             else:
-                raise ValueError('Layer with id {} does not exist.'.format(layerpath))
+                raise ValueError('Layer with id {} does not exist.'.format(layer))
 
-        out = self.blobs[layerpath]
+        out = self.blobs[layer]
 
         if type(out) is list:
             clean_out = []
@@ -261,30 +270,7 @@ class TorchAdapter(NNAdapter):
             print('Warning: No standard deviation specified.')
             self.nostd_warn = False
 
-        # Load data in first step from list
-        data = np.zeros((len(listofimages), self.inputsize[0], self.inputsize[1], self.inputsize[2]), dtype=np.float32)
-
-        for i, h in enumerate(listofimages):
-            if type(h) == str:
-                im = image.read(h)
-            elif type(h) == np.ndarray:
-                im = h
-
-            im = image.resize(im, self.inputsize[1:])
-
-            if self.mean is not None and self.mean.ndim == 1:
-                im -= self.mean
-            if self.std is not None and self.std.ndim == 1:
-                im /= self.std
-            im = im.transpose(2, 0, 1)  # resulting order is: channels x height x width
-            if self.mean is not None and self.mean.ndim == 3:
-                im -= self.mean
-            if self.std is not None and self.std.ndim == 3:
-                im /= self.std
-
-            data[i] = im
-
-        return data
+        return NNAdapter.preprocess(listofimages, self.inputsize, self.mean, self.std)
 
     def forward(self, input):
         """
@@ -323,15 +309,124 @@ class TorchAdapter(NNAdapter):
 
         return out
 
-    def _traverse_model(self, pathtolayer):
-        m = self.model
-        if type(pathtolayer) is list:
-            for layer in pathtolayer:
-                if len(m._modules) == 0:
-                    raise KeyError('Layer {} does not exist .{} does not contain the requested sub-node.'.format(
-                        pathtolayer, type(m)
-                    ))
-                m = m.modules[layer]
-            return m
+    @staticmethod
+    def _find(module, layerid, trace=[]):
+        if '.'.join(trace) == layerid:
+            return module
+
+        for key, mod in module._modules.items():
+            trace.append(key)
+            if layerid.startswith('.'.join(trace)):
+                result = TorchAdapter._find(mod, layerid, trace)
+                if result is not None:  # multiple layer ids may have the same prefix
+                    return result
+            trace.pop()
+
+        return None
+
+    @staticmethod
+    def _gkern(kernlen=21, nsig=3):
+        import scipy.stats as st
+        """Returns a 2D Gaussian kernel array."""
+
+        interval = (2 * nsig + 1.) / kernlen
+        x = np.linspace(-nsig - interval / 2., nsig + interval / 2., kernlen + 1)
+        kern1d = np.diff(st.norm.cdf(x))
+        kernel_raw = np.sqrt(np.outer(kern1d, kern1d))
+        kernel = kernel_raw / kernel_raw.sum()
+        return kernel
+
+    def visualize(self, input, layer, unitidx, lr=1.0, iters=500, eps=1e-6):
+        if isinstance(unitidx, list) and input is not None and input.shape[0] != len(unitidx):
+            raise ValueError('List of unit indices cannot be passed together with an input batch of unequal samples. '
+                             'Pass None for input alternatively.')
+        if input is None:
+            if isinstance(unitidx, list):
+                sz = (len(unitidx),) + self.inputsize
+            else:
+                sz = (1,) + self.inputsize
+            input_torch = torch.randn(*sz)
         else:
-            return m.modules[pathtolayer]
+            input_torch = torch.from_numpy(input)
+
+        # find module
+        module = TorchAdapter._find(self.model, layer, trace=[])
+        if module is None:
+            raise RuntimeError('Could not find layer %s' % layer)
+
+        gamma = 0.2
+        blur_every = 4
+        percentile = 0.0001
+
+        # Gaussian blur kernel for smoothing visualization
+        gkernsz = 7
+        gaussian_krnl = torch.from_numpy(TorchAdapter._gkern(gkernsz, 3))
+        # gaussian_krnl = torch.Tensor([
+        #     [0.0509,  0.1238,  0.0509],
+        #     [0.1238,  0.3012,  0.1238],
+        #     [0.0509,  0.1238,  0.0509],
+        # ])
+        blur = torch.nn.Conv2d(3, 3, gkernsz, padding=gkernsz//2, bias=False)
+        blur.weight.data[0, 0, :, :].copy_(gaussian_krnl)
+        blur.weight.data[1, 1, :, :].copy_(gaussian_krnl)
+        blur.weight.data[2, 2, :, :].copy_(gaussian_krnl)
+
+        # Transfer data to gpu
+        if self.use_gpu:
+            input_torch = input_torch.cuda()
+            blur = blur.cuda()
+        else:
+            input_torch = input_torch.float()
+
+        input = Variable(input_torch, requires_grad=True)
+
+        # determine target tensor for unit
+        self.model.forward(input)
+
+        target = Variable(self.blobs[layer])
+        target.data.zero_()
+
+        if target.dim() == 2:
+            if isinstance(unitidx, list):
+                for i, unit in enumerate(unitidx):
+                    target.data[i, unit] = 1.0
+            else:
+                target.data[:, unitidx] = 1.0
+        else:
+            if isinstance(unitidx, list):
+                for i, unit in enumerate(unitidx):
+                    target.data[i, unit, target.size(2) // 2, target.size(3) // 2] = 1.0
+            else:
+                target.data[:, unitidx, target.size(2) // 2, target.size(3) // 2] = 1.0
+
+        loss = [None]
+
+        def criterion_latch_on(module, input, output):
+            loss[0] = output
+        hook_handle = module.register_forward_hook(criterion_latch_on)
+
+        for i in range(iters):
+
+            self.model.forward(input)
+            loss[0].backward(target.data)
+
+            # sum = 0
+            # for k in range(3):
+            #     sum += torch.dot(input.data[0, 0], input.grad.data[0, 0])
+            # lower_bound = torch.abs(sum) * percentile
+
+            input.data.add_(lr, input.grad.data)
+            input.data.mul_(1.0-gamma)
+            input.grad.data.zero_()
+
+            if i % blur_every == 0:
+                input.data.copy_(blur.forward(input).data)
+
+            # if abs(loss[0].data[0] - last_loss) < eps:
+            #     break
+            # last_loss = loss[0].data[0]
+
+        hook_handle.remove()
+
+        return input.data.cpu().numpy()
+

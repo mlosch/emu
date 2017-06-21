@@ -1,3 +1,7 @@
+import numpy as np
+import image
+
+
 class NNAdapter(object):
     """
     Base class for NN library interfaces to load and read pre-trained models.
@@ -5,21 +9,6 @@ class NNAdapter(object):
     Override the abstract methods for different neural network libraries like Caffe, Torch or Keras,
     to enable simplified communication between analysis scripts and libraries.
     """
-    def preprocess(self, listofimages):
-        """
-        Preprocess a list of images to prepare it for use in the neural network.
-        Automatically loads images from disk if a string is given.
-
-        Parameters
-        ----------
-        input : List of strings or list of ndarrays.
-            The list may contain image filepaths and image ndarrays.
-
-         Returns
-        -------
-        output : ndarray
-            Preprocessed batch of images ready for the forward pass.
-        """
 
     def forward(self, input):
         """
@@ -122,3 +111,74 @@ class NNAdapter(object):
         Prints a model description to stdout displaying layer names of the model architecture.
         """
         raise NotImplementedError
+
+    @staticmethod
+    def preprocess(listofimages, inputsize, mean, std, dimorder='chw', channelorder='rgb', scale=1.0):
+        """
+        Preprocess a list of images to be used with the neural network.
+        Automatically loads images from disk if a string is given.
+
+        Parameters
+        ----------
+        listofimages : List of strings or list of unprocessed ndarrays, shape (Height, Width, Channels)
+            The list may contain image filepaths and image ndarrays.
+        inputsize : tuple or list
+            Target input data dimensionality of same format as dimorder
+        mean : ndarray
+            Image mean definition of format (channels, height, width) or (channels, ).
+            Set to None, to ignore.
+        std : ndarray
+            Standard deviation definition of format (channels, height, width) or (channels, )
+            Set to None, to ignore
+        dimorder : string
+            Order of dimensions. Default chw (channel, height, width)
+        channelorder : string
+            Order of color channels. Default: rgb (red, green, blue)
+        scale : float
+            Scaling of color values.
+
+        Returns
+        -------
+        output : ndarray
+            Preprocessed batch of images ready for the forward pass.
+        """
+
+        # Convert dimorder to tuple
+        dimmap = {
+            'h': 0,
+            'w': 1,
+            'c': 2,
+        }
+        imsize = (inputsize[dimorder.find('h')], inputsize[dimorder.find('w')])
+        dimorder = [dimmap[c] for c in dimorder]
+
+        # Load data in first step from list
+        data = np.zeros((len(listofimages), inputsize[0], inputsize[1], inputsize[2]), dtype=np.float32)
+
+        for i, h in enumerate(listofimages):
+            if type(h) is str:
+                im = image.read(h)
+            elif type(h) is np.ndarray:
+                im = h
+
+            im = image.resize(im, imsize)
+            if scale != 1.0:
+                im *= scale
+
+            if mean is not None and mean.ndim == 1:
+                im -= mean
+            if std is not None and std.ndim == 1:
+                im /= std
+
+            if channelorder == 'bgr':
+                im = im[:, :, ::-1]
+
+            im = im.transpose(*dimorder)  # resulting order is: channels x height x width
+            if mean is not None and mean.ndim == 3:
+                im -= mean
+            if std is not None and std.ndim == 3:
+                im /= std
+
+            data[i] = im
+
+        return data

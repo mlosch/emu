@@ -1,13 +1,14 @@
 # nnadapter
-Generic python interface to unify access to neural networks trained in machine learning libraries such as Caffe, PyTorch and Torch7.
+Generic python interface to unify access to neural networks trained in machine learning libraries such as Keras, PyTorch, Torch7 and Caffe.
 
 ## What is nnadapter?
 
 NNAdapter is a lightweight interface to deep learning libraries to simplify the creation of analysis toolchains. The focus is on processing images with pretrained image recognition models, manipulating parameters (e.g. to lesion a set of units) as well as reading parameters and output values of arbitrary layers. Hence, no training is supported with the nnadapter-interface.
 Currently supported machine learning libraries (backends) are:
 
-- [Caffe](http://caffe.berkeleyvision.org)
+- [Keras](https://keras.io/)
 - [pytorch](http://pytorch.org) & [Torch7](http://torch.ch)
+- [Caffe](http://caffe.berkeleyvision.org)
 
 ## Core functionality
 The base class defines the following functionality:
@@ -27,17 +28,41 @@ The base class defines the following functionality:
 - `set_bias(layer_name, bias_tensor)`
     - Assign a new bias to the given layer
     
+## Minimal example
+Forward two images through a Keras model and read the output of the first convolutional layer.
+```python
+from nnadapter.kerasadapter import KerasAdapter
+from skimage import data
+import numpy as np
+
+# initialize model
+mean = np.array([103.939, 116.779, 123.68])
+nn = KerasAdapter('ResNet50', 'imagenet', mean, std=None, inputsize=(224,224,3), keep_outputs=['conv1'])
+
+# load two example images from skimage
+images = [np.array(data.chelsea(), dtype=np.float32) / 255.0,
+          np.array(data.coffee(), dtype=np.float32) / 255.0]
+          
+# preprocess and forward images
+batch = nn.preprocess(images)
+predictions = nn.forward(batch)
+
+# read output of conv1
+conv1_output = nn.get_layeroutput('conv1')
+```
 
 ## Prerequisites
 
 - General
     - numpy (>= 1.11.1)
     - scikit-image (>= 0.12.3)
+- Using Keras as backend
+    - [keras](https://keras.io/#installation)
+- Using pytorch/torch as backend
+    - [pytorch](https://github.com/pytorch/pytorch#installation)
 - Using Caffe as backend
     - [caffe](http://caffe.berkeleyvision.org/installation.html)
     - [pycaffe](http://caffe.berkeleyvision.org/installation.html#python-andor-matlab-caffe-optional)
-- Using torch/pytorch as backend
-    - [pytorch](https://github.com/pytorch/pytorch#installation)
 
 ## Installation
 
@@ -46,6 +71,10 @@ The base class defines the following functionality:
 ## How-To
 
 - Find pretrained models:
+    - **Keras:**
+        - [Model Zoo](https://keras.io/applications/)
+          After installation, use pretrained models via passing an available architecture name to the `KerasAdapter`, 
+          e.g.: `KerasAdapter(model_cfg='ResNet50', model_weights='imagenet')`. See [Available models](https://keras.io/applications/#available-models)
     - **Caffe:** 
         - [Model Zoo](https://github.com/BVLC/caffe/wiki/Model-Zoo)
         - [ResNets](https://github.com/KaimingHe/deep-residual-networks#models)
