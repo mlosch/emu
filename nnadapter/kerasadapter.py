@@ -10,7 +10,7 @@ from collections import OrderedDict
 class KerasAdapter(NNAdapter):
     """
     Overrides the NNAdapter to load and read Keras models.
-    An installation of pytorch is required.
+    An installation of Keras is required.
     """
 
     def __init__(self, model_cfg, model_weights, mean, std, inputsize, keep_outputs=None, use_gpu=False):
@@ -23,7 +23,7 @@ class KerasAdapter(NNAdapter):
         model_cfg : String or dict or list
             Model configuration defining the architecture.
             Available options:
-             - Use a model identifier to define the model configuration.
+             - Use a model identifier to define the model configuration (e.g. 'ResNet50', 'VGG19').
              - Use a file path to a yaml or json formatted file to define the model configuration.
              - Use a dict to define the model configuration (e.g. as from keras_model.get_config())
              - Use a list to define the model configuration of a Sequential model (e.g. as from keras_model.get_config())
@@ -38,13 +38,13 @@ class KerasAdapter(NNAdapter):
         inputsize : tuple or list
             Target input data dimensionality of format: (height, width, channels).
             Used for rescaling given data in preprocess step.
-        use_gpu : bool
-            Flag to enable gpu use. Default: False
         keep_outputs : list, tuple or set
             List of layer identifier strings to keep during a feed forward call to enable later access via
             get_layeroutput().
             By default no layer outputs but the last are kept.
             Consolidate get_layers() to identify layers.
+        use_gpu : bool
+            Flag to enable gpu use. Default: False
         """
         self.base_model = self._load_model_config(model_cfg, model_weights)
 
@@ -236,9 +236,3 @@ class KerasAdapter(NNAdapter):
             return outputs[-1]
         else:
             return outputs
-
-if __name__ == '__main__':
-    nn = KerasAdapter('ResNet50','imagenet', None, None, (224,224,3))
-    a = [np.random.rand(256, 256, 3)]
-    b = nn.preprocess(a)
-    print(a[0].shape, b[0].shape)
