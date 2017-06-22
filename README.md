@@ -1,5 +1,5 @@
 # nnadapter
-Generic python interface to unify access to neural networks trained in machine learning libraries such as Keras, PyTorch, Torch7 and Caffe.
+Generic, lightweight python interface to unify loading and evaluating neural networks trained in machine learning libraries such as Keras, PyTorch, Torch7 and Caffe.
 
 ## What is nnadapter?
 
@@ -57,12 +57,16 @@ conv1_output = nn.get_layeroutput('conv1')
     - numpy (>= 1.11.1)
     - scikit-image (>= 0.12.3)
 - Using Keras as backend
-    - [keras](https://keras.io/#installation)
-- Using pytorch/torch as backend
-    - [pytorch](https://github.com/pytorch/pytorch#installation)
+    - [Keras](https://keras.io/#installation)
+    - and one of
+        - [TensorFlow](https://www.tensorflow.org/install/)
+        - [Theano](http://deeplearning.net/software/theano/install.html)
+        - [CNTK](https://docs.microsoft.com/en-us/cognitive-toolkit/Setup-CNTK-on-your-machine)
+- Using pytorch/torch7 as backend
+    - [PyTorch](https://github.com/pytorch/pytorch#installation)
 - Using Caffe as backend
-    - [caffe](http://caffe.berkeleyvision.org/installation.html)
-    - [pycaffe](http://caffe.berkeleyvision.org/installation.html#python-andor-matlab-caffe-optional)
+    - [Caffe](http://caffe.berkeleyvision.org/installation.html)
+    - [pyCaffe](http://caffe.berkeleyvision.org/installation.html#python-andor-matlab-caffe-optional)
 
 ## Installation
 
