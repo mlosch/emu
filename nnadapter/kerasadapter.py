@@ -178,7 +178,11 @@ class KerasAdapter(NNAdapter):
         return self.blobs[self.output_map[layer]]
 
     def get_layerparams(self, layer):
-        return tuple(self.model.get_layer(layer).get_weights())
+        params = self.model.get_layer(layer).get_weights()
+        if len(params) == 1:
+            return tuple(params[0], None)
+        else:
+            return tuple(params)
 
     def set_weights(self, layer, weights):
         L = self.model.get_layer(layer)
