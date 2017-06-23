@@ -41,12 +41,13 @@ Forward two images through a Keras model and read the output of the first convol
 
 .. code:: python
 
+    import emu
     from emu.keras import KerasAdapter
     from skimage import data
     import numpy as np
 
     # initialize model
-    mean = np.array([103.939, 116.779, 123.68])  #
+    mean = emu.keras.imagenet_mean
     nn = KerasAdapter('ResNet50', 'imagenet', mean, std=None, inputsize=(224,224,3), keep_outputs=['conv1'])
 
     # load two example images from skimage
