@@ -18,10 +18,10 @@ Submodules
 
 .. toctree::
 
-   emu.caffeadapter
+   emu.caffe
    emu.docutil
    emu.image
-   emu.kerasadapter
+   emu.keras
    emu.nnadapter
-   emu.torchadapter
+   emu.torch
 
