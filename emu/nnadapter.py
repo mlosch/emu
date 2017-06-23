@@ -36,7 +36,7 @@ class NNAdapter(object):
 
         Parameters
         ----------
-        layer : String
+        layer : string
             Layer identification.
 
         weights : numpy.ndarray.
@@ -55,7 +55,7 @@ class NNAdapter(object):
 
         Parameters
         ----------
-        layer : String
+        layer : string
             Layer identification.
 
         bias : numpy.ndarray.
@@ -70,7 +70,7 @@ class NNAdapter(object):
 
         Parameters
         ----------
-        layer : String
+        layer : string
             Layer identification.
 
         Returns
@@ -82,15 +82,22 @@ class NNAdapter(object):
     def get_layeroutput(self, layer):
         """
         Get the output of a specific layer.
+        forward(...) has to be called in advance.
 
         Parameters
         ----------
-        layer : String, Layer identification
+        layer : string, Layer identification
+            Specifying the location of the layer within the model.
+            To see all identifiers, call `get_layers`.
 
         Returns
         -------
         output : ndarray
             Numpy tensor of output values.
+
+        Raises
+        -------
+        ValueError : If Layer is not defined in model
         """
         raise NotImplementedError
 
@@ -108,7 +115,11 @@ class NNAdapter(object):
 
     def model_description(self):
         """
-        Prints a model description to stdout displaying layer names of the model architecture.
+        Get a formatted model description as string containing layer names of the model architecture.
+
+        Returns
+        -------
+        Description : string
         """
         raise NotImplementedError
 

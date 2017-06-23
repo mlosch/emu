@@ -5,6 +5,7 @@ from keras.models import model_from_json, model_from_yaml, Model, Sequential
 from keras import applications
 from keras import backend
 from collections import OrderedDict
+from docutil import doc_inherit
 
 
 class KerasAdapter(NNAdapter):
@@ -143,26 +144,8 @@ class KerasAdapter(NNAdapter):
 
         raise ValueError('Could not load model from configuration object of type {}.'.format(type(model_cfg)))
 
+    @doc_inherit
     def get_layeroutput(self, layer):
-        """
-        Get the output of a specific layer.
-        forward(...) has to be called in advance.
-
-        Parameters
-        ----------
-        layer : String, Layer identification
-            Specifying the location of the layer within the model.
-            To see all identifiers, call `get_layers`.
-
-        Returns
-        -------
-        output : ndarray
-            Numpy tensor of output values.
-
-        Raises
-        -------
-        ValueError : If Layer is not defined in model or has been ignore due to output filter.
-        """
         assert len(self.blobs) > 0, 'Forward has not been called. Layer outputs are not ready.'
 
         if layer not in self.output_map:
@@ -177,6 +160,7 @@ class KerasAdapter(NNAdapter):
 
         return self.blobs[self.output_map[layer]]
 
+    @doc_inherit
     def get_layerparams(self, layer):
         params = self.model.get_layer(layer).get_weights()
         if len(params) == 1:
@@ -184,19 +168,23 @@ class KerasAdapter(NNAdapter):
         else:
             return tuple(params)
 
+    @doc_inherit
     def set_weights(self, layer, weights):
         L = self.model.get_layer(layer)
         _, bias = L.get_weights()
         L.set_weights((weights, bias))
 
+    @doc_inherit
     def set_bias(self, layer, bias):
         L = self.model.get_layer(layer)
         weights, _ = L.get_weights()
         L.set_weights((weights, bias))
 
+    @doc_inherit
     def get_layers(self):
         return self.layers
 
+    @doc_inherit
     def model_description(self):
         return self.model.name + '\n\t' + \
                                  '\n\t'.join([': '.join(entry) for entry in self.layers.items()])
@@ -228,6 +216,7 @@ class KerasAdapter(NNAdapter):
                                     self.mean, self.std,
                                     self.dimorder, channelorder='bgr', scale=255.0)
 
+    @doc_inherit
     def forward(self, input):
         outputs = self.model.predict(input, batch_size=input.shape[0])
         self.blobs = outputs

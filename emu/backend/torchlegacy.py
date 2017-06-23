@@ -1,6 +1,9 @@
 """
-Thanks to clcarwin
-https://github.com/clcarwin/convert_torch_to_pytorch
+This code enables backward compatibility with Torch7 models and is used by TorchAdapter.
+Do not use anywhere else.
+
+It is adapted from https://github.com/clcarwin/convert_torch_to_pytorch.
+Credit goes to clcarwin
 """
 
 from __future__ import print_function

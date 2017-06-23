@@ -10,7 +10,7 @@ from .backend.torchlegacy import load_legacy_model, LambdaBase
 import numpy as np
 
 from nnadapter import NNAdapter
-import image
+from docutil import doc_inherit
 
 
 class TorchAdapter(NNAdapter):
@@ -43,6 +43,7 @@ class TorchAdapter(NNAdapter):
             By default no layer outputs but the last are kept.
             Consolidate get_layers() to identify layers.
         """
+        # self.model = self._load_model_config(model_fp)
         if '.' not in os.path.basename(model_fp):
             import torchvision.models as models
             if model_fp not in models.__dict__:
@@ -73,8 +74,8 @@ class TorchAdapter(NNAdapter):
         self._register_forward_hooks(self.model)
 
         # Load/set mean and std
-        self.mean = TorchAdapter.load_mean_std(mean)
-        self.std = TorchAdapter.load_mean_std(std)
+        self.mean = TorchAdapter._load_mean_std(mean)
+        self.std = TorchAdapter._load_mean_std(std)
 
         self.nomean_warn = True
         self.nostd_warn = True
@@ -102,8 +103,56 @@ class TorchAdapter(NNAdapter):
         else:
             self.blobs[name] = output.data.clone()
 
+    # @staticmethod
+    # def _load_model_config(model_def):
+    #     if isinstance(model_def, torch.nn.Module):
+    #
+    #     elif '.' not in os.path.basename(model_def):
+    #         import torchvision.models as models
+    #         if model_def not in models.__dict__:
+    #             raise KeyError('Model {} does not exist in pytorchs model zoo.'.format(model_def))
+    #         print('Loading model {} from pytorch model zoo'.format(model_def))
+    #         return models.__dict__[model_def](pretrained=True)
+    #     else:
+    #         print('Loading model from {}'.format(model_def))
+    #         if model_def.endswith('.t7'):
+    #             return load_legacy_model(model_def)
+    #         else:
+    #             return torch.load(model_def)
+    #
+    #
+    #     if type(model_cfg) == str:
+    #         if not os.path.exists(model_cfg):
+    #             try:
+    #                 class_ = getattr(applications, model_cfg)
+    #                 return class_(weights=model_weights)
+    #             except AttributeError:
+    #                 available_mdls = [attr for attr in dir(applications) if callable(getattr(applications, attr))]
+    #                 raise ValueError('Could not load pretrained model with key {}. '
+    #                                  'Available models: {}'.format(model_cfg, ', '.join(available_mdls)))
+    #
+    #         with open(model_cfg, 'r') as fileh:
+    #             try:
+    #                 return model_from_json(fileh)
+    #             except ValueError:
+    #                 pass
+    #
+    #             try:
+    #                 return model_from_yaml(fileh)
+    #             except ValueError:
+    #                 pass
+    #
+    #         raise ValueError('Could not load model from configuration file {}. '
+    #                          'Make sure the path is correct and the file format is yaml or json.'.format(model_cfg))
+    #     elif type(model_cfg) == dict:
+    #         return Model.from_config(model_cfg)
+    #     elif type(model_cfg) == list:
+    #         return Sequential.from_config(model_cfg)
+    #
+    #     raise ValueError('Could not load model from configuration object of type {}.'.format(type(model_cfg)))
+
     @staticmethod
-    def load_mean_std(handle):
+    def _load_mean_std(handle):
         """
         Loads mean/std values from a .t7/.npy file or returns the identity if already a numpy array.
         Parameters
@@ -124,6 +173,7 @@ class TorchAdapter(NNAdapter):
         elif type(handle) == np.ndarray:
             return handle
 
+    @doc_inherit
     def model_description(self):
         return str(self.model)
 
@@ -150,6 +200,7 @@ class TorchAdapter(NNAdapter):
             self._get_layers(mod, dictionary, trace)
             trace.pop()
 
+    @doc_inherit
     def get_layers(self):
         layers = OrderedDict()
         self._get_layers(self.model, layers)
@@ -170,27 +221,16 @@ class TorchAdapter(NNAdapter):
         torch_values = torch.from_numpy(values)
         layer_values.copy_(torch_values)
 
+    @doc_inherit
     def set_weights(self, layer, weights):
         self._set_param(layer, 'weight', weights)
 
+    @doc_inherit
     def set_bias(self, layer, bias):
         self._set_param(layer, 'bias', bias)
 
+    @doc_inherit
     def get_layerparams(self, layer):
-        """
-        Return a copy of the parameters (weights, bias) of a layer.
-
-        Parameters
-        ----------
-        layer : String
-            Expected format: (%d.)*%d, e.g. 11.3.2 or 1
-            specifying the location of the layer within the torch model.
-            To see possible locations of a model, call `model_description`.
-
-        Returns
-        -------
-        (weights, bias) : Tuple of ndarrays
-        """
         weight_key = layer + '.weight'
         bias_key = layer + '.bias'
         weights = self._get_param(layer, 'weight') if weight_key in self.state_dict else None
@@ -201,27 +241,8 @@ class TorchAdapter(NNAdapter):
 
         return np_weights, np_bias
 
+    @doc_inherit
     def get_layeroutput(self, layer):
-        """
-        Get the output of a specific layer.
-        forward(...) has to be called in advance.
-
-        Parameters
-        ----------
-        layer : String, Layer identification
-            Expected format: (%d.)*%d, e.g. 11.3.2 or 1
-            specifying the location of the layer within the torch model.
-            To see possible locations of a model, call `model_description`.
-
-        Returns
-        -------
-        output : ndarray
-            Numpy tensor of output values.
-
-        Raises
-        -------
-        ValueError : If Layer is not defined in model or has been ignore due to output filter.
-        """
         assert self.ready, 'Forward has not been called. Layer outputs are not ready.'
 
         if layer not in self.blobs:
@@ -272,21 +293,8 @@ class TorchAdapter(NNAdapter):
 
         return NNAdapter.preprocess(listofimages, self.inputsize, self.mean, self.std)
 
+    @doc_inherit
     def forward(self, input):
-        """
-        Forward a batch of images through the neural network.
-
-        Parameters
-        ----------
-        input : ndarray
-            Batch of preprocessed images with 4 dimensions: (Batch, Channels, Height, Width).
-
-        Returns
-        -------
-        output : ndarray
-            Output of final network layer.
-        """
-
         input_torch = torch.from_numpy(input)
         if self.use_gpu:
             input_torch = input_torch.cuda()

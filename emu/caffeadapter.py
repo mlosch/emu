@@ -4,6 +4,7 @@ import caffe
 from caffe.proto import caffe_pb2
 from google.protobuf import text_format
 import numpy as np
+from docutil import doc_inherit
 
 
 class CaffeAdapter(NNAdapter):
@@ -11,6 +12,7 @@ class CaffeAdapter(NNAdapter):
     Overrides the NNAdapter to load and read Caffe models.
     An installation of Caffe and pycaffe is required.
     """
+
     def __init__(self, prototxt, caffemodel, mean, use_gpu=False):
         self.net = caffe.Net(prototxt, caffemodel, caffe.TEST)
         if use_gpu:
@@ -65,41 +67,24 @@ class CaffeAdapter(NNAdapter):
         arr = np.array(caffe.io.blobproto_to_array(blob))
         return arr[0]
 
+    @doc_inherit
     def model_description(self):
         string = ''
         for k, v in self.net.blobs.items():
             string += '{}: {}\n'.format(k, v)
         return string
 
+    @doc_inherit
     def get_layers(self):
-        """
-        Get layer ids/names and their corresponding layer type of
-        all layers within the loaded network.
-
-        Returns
-        -------
-        Layer info : OrderedDict
-            Dictionary of layer ids/names and corresponding types.
-        """
         return self.layer_types
 
+    @doc_inherit
     def get_layerparams(self, layer):
-        """
-        Get the parameters of a specific layer.
-
-        Parameters
-        ----------
-        layer : String
-            Layer identification.
-
-        Returns
-        -------
-        (weights, bias) : Tuple of ndarrays
-        """
         if layer not in self.net.params:
             return None
         return self.net.params[layer][0].data, self.net.params[layer][1].data
 
+    @doc_inherit
     def get_layeroutput(self, layer):
         assert self.ready, 'Forward has not been called. Layer outputs are not ready.'
         if layer not in self.net.blobs:
@@ -136,6 +121,7 @@ class CaffeAdapter(NNAdapter):
 
         return data
 
+    @doc_inherit
     def forward(self, data):
         self.net.blobs['data'].reshape(*data.shape)
         self.net.blobs['data'].data[...] = data[...]
@@ -153,6 +139,7 @@ class CaffeAdapter(NNAdapter):
         else:
             return out
 
+    @doc_inherit
     def set_weights(self, layer, weights):
         if layer not in self.net.params:
             raise KeyError('Layer {} does not exist.'.format(layer))
@@ -165,6 +152,7 @@ class CaffeAdapter(NNAdapter):
 
         self.net.params[layer][0].data[...] = weights[...]
 
+    @doc_inherit
     def set_bias(self, layer, bias):
         if layer not in self.net.params:
             raise KeyError('Layer {} does not exist.'.format(layer))

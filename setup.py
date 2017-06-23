@@ -6,23 +6,23 @@ from os import path
 here = path.abspath(path.dirname(__file__))
 
 # Get the long description from the README file
-with open(path.join(here, 'README.md'), encoding='utf-8') as f:
+with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 setup(
-    name='nnadapter',
+    name='emu',
 
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
     version='0.1.0',
 
-    description='Generic python interface to unify access to neural networks ' \
-                'trained in machine learning libraries such as Caffe, PyTorch and Torch7',
+    description='Generic, lightweight python interface to unify loading and evaluating neural networks trained in '
+                'machine learning libraries such as Keras, PyTorch, Torch7 and Caffe.',
     long_description=long_description,
 
     # The project's main homepage.
-    url='https://github.com/mlosch/nnadapter',
+    url='https://github.com/mlosch/emu',
 
     # Author details
     author='Max M Losch',
@@ -58,7 +58,7 @@ setup(
     ],
 
     # What does your project relate to?
-    keywords='deep-learning neural-networks pytorch torch caffe',
+    keywords='deep-learning neural-networks pytorch torch caffe keras',
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
