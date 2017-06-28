@@ -98,8 +98,9 @@ class TorchAdapter(NNAdapter):
         """
         for key, mod in module._modules.items():
             trace.append(key)
-            if key in self.keep_outputs:
-                mod.register_forward_hook(partial(self._nn_forward_hook, name='.'.join(trace)))
+            name = '.'.join(trace)
+            if name in self.keep_outputs:
+                mod.register_forward_hook(partial(self._nn_forward_hook, name=name))
             self._register_forward_hooks(mod, trace)
             trace.pop()
 
@@ -283,6 +284,7 @@ class TorchAdapter(NNAdapter):
             The list may contain image filepaths and image ndarrays.
             For ndarrays, the shape (Height, Width, Channels) has to conform with the input size defined at
             object construction.
+            ndarrays have to be normalized to 1.
 
         Returns
         -------

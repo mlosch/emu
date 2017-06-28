@@ -133,6 +133,7 @@ class NNAdapter(object):
         ----------
         listofimages : List of strings or list of unprocessed ndarrays, shape (Height, Width, Channels)
             The list may contain image filepaths and image ndarrays.
+            ndarrays have to be normalized to 1.
         inputsize : tuple or list
             Target input data dimensionality of same format as dimorder
         mean : ndarray

@@ -205,6 +205,7 @@ class KerasAdapter(NNAdapter):
             The list may contain image filepaths and image ndarrays.
             For ndarrays, the shape (Height, Width, Channels) has to conform with the input size defined at
             object construction.
+            ndarrays have to be normalized to 1.
 
         Returns
         -------

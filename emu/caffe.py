@@ -105,6 +105,7 @@ class CaffeAdapter(NNAdapter):
         listofimages : List of strings or list of ndarrays, shape (Height, Width, Channels)
             The list may contain image filepaths and image ndarrays.
             For ndarrays, the shape (Height, Width, Channels) has to conform with the input size stated in the model prototxt.
+            ndarrays have to be normalized to 1.
 
         Returns
         -------
