@@ -50,7 +50,7 @@ class TorchAdapter(NNAdapter):
             Consolidate get_layers() to identify layers.
         """
         # self.model = self._load_model_config(model_fp)
-        if '.' not in os.path.basename(model_fp):
+        if not os.path.exists(model_fp):
             import torchvision.models as models
             if model_fp not in models.__dict__:
                 raise KeyError('Model {} does not exist in pytorchs model zoo.'.format(model_fp))
