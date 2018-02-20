@@ -32,8 +32,8 @@ class TorchAdapter(NNAdapter):
 
         Parameters
         ----------
-        model_fp : String
-            Filepath or model identifier.
+        model_fp : String or torch.nn.Module
+            Module instance, filepath (to .t7 file) or model identifier.
         mean : ndarray or String
             Mean definition via array or filepath to .t7 torch or .npy tensor.
         std : ndarray or String
@@ -50,7 +50,9 @@ class TorchAdapter(NNAdapter):
             Consolidate get_layers() to identify layers.
         """
         # self.model = self._load_model_config(model_fp)
-        if not os.path.exists(model_fp):
+        if type(model_fp) is not str:
+            self.model = model_fp
+        elif not os.path.exists(model_fp):
             import torchvision.models as models
             if model_fp not in models.__dict__:
                 raise KeyError('Model {} does not exist in pytorchs model zoo.'.format(model_fp))
@@ -99,6 +101,7 @@ class TorchAdapter(NNAdapter):
         for key, mod in module._modules.items():
             trace.append(key)
             name = '.'.join(trace)
+
             if name in self.keep_outputs:
                 mod.register_forward_hook(partial(self._nn_forward_hook, name=name))
             self._register_forward_hooks(mod, trace)
@@ -109,54 +112,6 @@ class TorchAdapter(NNAdapter):
             self.blobs[name] = [o.data.clone() for o in output]
         else:
             self.blobs[name] = output.data.clone()
-
-    # @staticmethod
-    # def _load_model_config(model_def):
-    #     if isinstance(model_def, torch.nn.Module):
-    #
-    #     elif '.' not in os.path.basename(model_def):
-    #         import torchvision.models as models
-    #         if model_def not in models.__dict__:
-    #             raise KeyError('Model {} does not exist in pytorchs model zoo.'.format(model_def))
-    #         print('Loading model {} from pytorch model zoo'.format(model_def))
-    #         return models.__dict__[model_def](pretrained=True)
-    #     else:
-    #         print('Loading model from {}'.format(model_def))
-    #         if model_def.endswith('.t7'):
-    #             return load_legacy_model(model_def)
-    #         else:
-    #             return torch.load(model_def)
-    #
-    #
-    #     if type(model_cfg) == str:
-    #         if not os.path.exists(model_cfg):
-    #             try:
-    #                 class_ = getattr(applications, model_cfg)
-    #                 return class_(weights=model_weights)
-    #             except AttributeError:
-    #                 available_mdls = [attr for attr in dir(applications) if callable(getattr(applications, attr))]
-    #                 raise ValueError('Could not load pretrained model with key {}. '
-    #                                  'Available models: {}'.format(model_cfg, ', '.join(available_mdls)))
-    #
-    #         with open(model_cfg, 'r') as fileh:
-    #             try:
-    #                 return model_from_json(fileh)
-    #             except ValueError:
-    #                 pass
-    #
-    #             try:
-    #                 return model_from_yaml(fileh)
-    #             except ValueError:
-    #                 pass
-    #
-    #         raise ValueError('Could not load model from configuration file {}. '
-    #                          'Make sure the path is correct and the file format is yaml or json.'.format(model_cfg))
-    #     elif type(model_cfg) == dict:
-    #         return Model.from_config(model_cfg)
-    #     elif type(model_cfg) == list:
-    #         return Sequential.from_config(model_cfg)
-    #
-    #     raise ValueError('Could not load model from configuration object of type {}.'.format(type(model_cfg)))
 
     @staticmethod
     def _load_mean_std(handle):
@@ -284,7 +239,7 @@ class TorchAdapter(NNAdapter):
             The list may contain image filepaths and image ndarrays.
             For ndarrays, the shape (Height, Width, Channels) has to conform with the input size defined at
             object construction.
-            ndarrays have to be normalized to 1.
+            ndarrays have to be in range 0 to 1.
 
         Returns
         -------
