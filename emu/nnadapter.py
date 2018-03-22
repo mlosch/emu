@@ -171,9 +171,11 @@ class NNAdapter(object):
             if type(h) is str:
                 im = image.read(h)
             elif type(h) is np.ndarray:
-                im = h
+                im = h.copy()
 
-            im = image.resize(im, imsize)
+            if im.shape[:2] != imsize:
+                im = image.resize(im, imsize)
+
             if scale != 1.0:
                 im *= scale
 
